@@ -70,14 +70,18 @@ static irqreturn_t jpg_isr_thread(int irq, void *data);
 void jpg_qos_config(struct jpg_dev_t *hw_dev)
 {
 	unsigned int i = 0, jpg_qos_num = 0, cam_jpg_qos_num = 0;
-	int reg_val;
+	int reg_val, ret;
 	struct jpg_qos_reg *jpg_mtx_qos = NULL;
 
 	/*static volatile unsigned int *base_addr_virt;*/
 	unsigned int *base_addr_virt;
 
-	jpg_clk_enable(hw_dev);
+	ret = jpg_clk_enable(hw_dev);
 
+	if (ret){
+		pr_info("jpg_clk_enable fail");
+		return;
+	}
 	if (hw_dev->version == QOGIRN6L) {
 		jpg_mtx_qos = jpg_mtx_qos_qogirn6lite;
 		jpg_qos_num = ARRAY_SIZE(jpg_mtx_qos_qogirn6lite);
