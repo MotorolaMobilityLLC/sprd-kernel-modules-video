@@ -63,6 +63,11 @@ static int boot_mode_check(void)
 	if (strstr(cmd_line, "sprdboot.mode=cali"))
 		ret = 1;
 
+	if (strstr(cmd_line, "sprdboot.mode=autotest"))
+		ret = 2;
+
+	pr_info("%s: boot_mode_check ret %d\n", __func__, ret);
+
 	return ret;
 }
 
@@ -223,9 +228,9 @@ static int vsp_pd_probe(struct platform_device *pdev)
 	if (boot_mode_check()) {
 		ret = vsp_shutdown(pd);
 		if (!ret) {
-			pr_info("%s: calibration mode and not probe\n", __func__);
+			pr_info("%s: CALI or BBAT mode not probe\n", __func__);
 		} else {
-			pr_err("%s: calibration mode vsp shutdown failed\n", __func__);
+			pr_err("%s: vsp_shutdown failed\n", __func__);
 		}
 		return 0;
 	}
