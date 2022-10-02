@@ -584,7 +584,7 @@ static int jpg_open(struct inode *inode, struct file *filp)
 	hw_dev.jpg_int_status = 0;
 
 	pm_runtime_get_sync(hw_dev.jpg_dev);
-	jpg_qos_config(&hw_dev);
+	/*jpg_qos_config(&hw_dev);*/
 	ret = 0;
 	dev_info(hw_dev.jpg_dev, "jpg pw_on: ret %d", ret);
 
