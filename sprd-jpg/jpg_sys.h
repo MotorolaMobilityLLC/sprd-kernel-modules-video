@@ -6,7 +6,7 @@
 */
 #define CAM_JPG_SOC_QOS_BASE 0x30000000
 #define JPG_SOC_QOS_BASE 0x30070000
-
+#define SYS_MTX_CFG_EN 0x0
 
 struct jpg_qos_reg {
 	unsigned int	offset;

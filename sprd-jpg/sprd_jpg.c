@@ -82,13 +82,22 @@ void jpg_qos_config(struct jpg_dev_t *hw_dev)
 		pr_info("jpg_clk_enable fail");
 		return;
 	}
+
 	if (hw_dev->version == QOGIRN6L) {
+		/*enable sys_mtx_cfg base:0x30000000 + 0x0, bit[4]*/
+		ret = regmap_update_bits(
+			regs[RESET].gpr, SYS_MTX_CFG_EN,
+			0x10, 0x10);
+		if (ret) {
+			pr_info("regmap_update_bits failed %s, %d\n",
+				__func__, __LINE__);
+			goto clk_disable;
+		}
 		jpg_mtx_qos = jpg_mtx_qos_qogirn6lite;
 		jpg_qos_num = ARRAY_SIZE(jpg_mtx_qos_qogirn6lite);
 	} else {
 		pr_info("No jpg qos config");
-		jpg_clk_disable(hw_dev);
-		return;
+		goto clk_disable;
 	}
 
 	cam_jpg_qos_num = ARRAY_SIZE(cam_jpg_mtx_qos);
@@ -97,7 +106,7 @@ void jpg_qos_config(struct jpg_dev_t *hw_dev)
 		base_addr_virt = ioremap(JPG_SOC_QOS_BASE + jpg_mtx_qos[i].offset, 4);
 		reg_val = readl_relaxed((void __iomem *)base_addr_virt);
 		writel_relaxed((((reg_val) & (~jpg_mtx_qos[i].mask))
-		| (jpg_mtx_qos[i].value)), (void __iomem *)base_addr_virt);
+			| (jpg_mtx_qos[i].value)), (void __iomem *)base_addr_virt);
 		iounmap(base_addr_virt);
 	}
 
@@ -105,10 +114,10 @@ void jpg_qos_config(struct jpg_dev_t *hw_dev)
 		base_addr_virt = ioremap(CAM_JPG_SOC_QOS_BASE + cam_jpg_mtx_qos[i].offset, 4);
 		reg_val = readl_relaxed((void __iomem *)base_addr_virt);
 		writel_relaxed((((reg_val) & (~cam_jpg_mtx_qos[i].mask))
-		| (cam_jpg_mtx_qos[i].value)), (void __iomem *)base_addr_virt);
+			| (cam_jpg_mtx_qos[i].value)), (void __iomem *)base_addr_virt);
 		iounmap(base_addr_virt);
 	}
-
+clk_disable:
 	jpg_clk_disable(hw_dev);
 }
 
@@ -584,7 +593,7 @@ static int jpg_open(struct inode *inode, struct file *filp)
 	hw_dev.jpg_int_status = 0;
 
 	pm_runtime_get_sync(hw_dev.jpg_dev);
-	/*jpg_qos_config(&hw_dev);*/
+	jpg_qos_config(&hw_dev);
 	ret = 0;
 	dev_info(hw_dev.jpg_dev, "jpg pw_on: ret %d", ret);
 
