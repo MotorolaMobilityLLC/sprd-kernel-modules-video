@@ -55,14 +55,14 @@ static const struct of_device_id vpu_pd_of_match[] = {
 	{ },
 };
 
-static bool cali_mode_check(const char *str)
+static bool mode_check(const char *str)
 {
-	struct device_node *calibration_mode;
+	struct device_node *mode;
 	const char *cmd_line;
 	int rc;
 
-	calibration_mode = of_find_node_by_path("/chosen");
-	rc = of_property_read_string(calibration_mode, "bootargs", &cmd_line);
+	mode = of_find_node_by_path("/chosen");
+	rc = of_property_read_string(mode, "bootargs", &cmd_line);
 	if (rc)
 		return false;
 
@@ -212,7 +212,7 @@ static int vpu_pd_probe(struct platform_device *pdev)
 	uint32_t syscon_args[2];
 	struct sprd_vpu_pd *pd;
 	int i, ret;
-	bool cali_mode;
+	bool mode;
 	struct of_phandle_args child, parent;
 
 	dev_info(dev, "%s, %d\n", __func__, __LINE__);
@@ -245,14 +245,14 @@ static int vpu_pd_probe(struct platform_device *pdev)
 			pname, pd->regmap[i], pd->reg[i], pd->mask[i]);
 	}
 
-	cali_mode = cali_mode_check("sprdboot.mode=cali");
-	if (cali_mode) {
-		pr_info("cali mode enter success!");
+	mode = (mode_check("sprdboot.mode=cali") || mode_check("sprdboot.mode=autotest"));
+	if (mode) {
+		pr_info("CALI or BBAT mode enter success!");
 		ret = vpu_vsp_cali(pd);
 		if (!ret)
-			pr_info("%s: calibration mode and not probe\n", __func__);
+			pr_info("%s: CALI or BBAT mode not probe\n", __func__);
 		else
-			pr_err("%s: calibration mode vpu shutdown failed\n", __func__);
+			pr_err("%s: vsp_shutdown failed\n", __func__);
 	}
 
 	pm_genpd_init(&pd->gpd, NULL, true);
