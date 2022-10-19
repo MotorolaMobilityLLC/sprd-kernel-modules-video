@@ -286,7 +286,7 @@ static int vpu_pd_probe(struct platform_device *pdev)
 				parent.np, child.np);
 	}
 
-	if (mode) {
+	if (mode_check("sprdboot.mode=cali")) {
 		pm_runtime_set_active(dev);
 		pm_runtime_enable(dev);
 		return 0;
