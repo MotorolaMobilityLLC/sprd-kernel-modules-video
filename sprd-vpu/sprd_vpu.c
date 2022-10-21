@@ -269,6 +269,10 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			dev_err(dev, "copy mapdata failed, ret %d\n", ret);
 			return -EFAULT;
 		}
+		if (mapdata.fd < 0) {
+			dev_err(dev, "%s %d, mapdata.fd < 0, INVALID!\n", __func__, __LINE__);
+			return -EINVAL;
+		}
 
 		ret = get_iova((void *)vpu_fp, data, &mapdata, (void __user *)arg);
 
@@ -283,6 +287,11 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			dev_err(dev, "copy ummapdata failed, ret %d\n", ret);
 			return -EFAULT;
 		}
+		if (ummapdata.fd < 0) {
+			dev_err(dev, "%s %d, ummapdata.fd < 0, INVALID!\n", __func__, __LINE__);
+			return -EINVAL;
+		}
+
 		ret = free_iova((void *)vpu_fp, data, &ummapdata);
 		break;
 
