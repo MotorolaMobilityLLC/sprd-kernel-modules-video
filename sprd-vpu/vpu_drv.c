@@ -608,48 +608,6 @@ int free_iova(void *inst_ptr, struct vpu_platform_data *data,
 	return ret;
 }
 
-void non_free_bufs_check(void *inst_ptr, struct vpu_platform_data *data)
-{
-	struct vpu_iommu_map_entry *entry = NULL;
-	struct sprd_iommu_unmap_data unmapdata = {0};
-	int ret = 0;
-	int b_find = 0;
-
-	clock_enable(data);
-	mutex_lock(&data->map_lock);
-
-	do {
-		b_find  = 0;
-		list_for_each_entry(entry, &data->map_list, list) {
-			if (entry->inst_ptr == inst_ptr) {
-				unmapdata.iova_addr = entry->iova_addr;
-				unmapdata.iova_size = entry->iova_size;
-				unmapdata.ch_type = SPRD_IOMMU_FM_CH_RW;
-				unmapdata.buf = NULL;
-				b_find = 1;
-				list_del(&entry->list);
-				break;
-			}
-		}
-		if (b_find) {
-			pr_info("%s, inst %p, iova_addr=%#lx, size=%zu)\n", __func__,
-				entry->inst_ptr, entry->iova_addr, entry->iova_size);
-
-			ret = sprd_iommu_unmap(data->dev, &unmapdata);
-			if (ret) {
-				pr_err("sprd_iommu_unmap failed: ret=%d, iova_addr=%#lx, size=%zu\n",
-					ret, unmapdata.iova_addr, unmapdata.iova_size);
-			}
-
-			kfree(entry);
-		}
-	} while (b_find);
-
-	mutex_unlock(&data->map_lock);
-	clock_disable(data);
-
-}
-
 int get_clk(struct vpu_platform_data *data, struct device_node *np)
 {
 	int ret = 0, i, j = 0;

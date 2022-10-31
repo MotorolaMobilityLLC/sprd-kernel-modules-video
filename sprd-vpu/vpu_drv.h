@@ -177,7 +177,6 @@ void clock_disable(struct vpu_platform_data *data);
 void clr_vpu_interrupt_mask(struct vpu_platform_data *data);
 int get_iova(void *inst_ptr, struct vpu_platform_data *data, struct iommu_map_data *mapdata, void __user *arg);
 int free_iova(void *inst_ptr, struct vpu_platform_data *data, struct iommu_map_data *ummapdata);
-void non_free_bufs_check(void *inst_ptr, struct vpu_platform_data *data);
 long compat_vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 int vsp_get_dmabuf(int fd, struct dma_buf **dmabuf, void **buf, size_t *size);
 

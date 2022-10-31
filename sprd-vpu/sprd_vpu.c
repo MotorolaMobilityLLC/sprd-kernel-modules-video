@@ -423,7 +423,6 @@ static int vpu_open(struct inode *inode, struct file *filp)
 
 static int vpu_release(struct inode *inode, struct file *filp)
 {
-	int ret = 0;
 	struct vpu_fp *vpu_fp = filp->private_data;
 	struct vpu_platform_data *data = vpu_fp->dev_data;
 
@@ -440,15 +439,6 @@ static int vpu_release(struct inode *inode, struct file *filp)
 		dev_err(data->dev, "error occurred and wakelock relax\n");
 		__pm_relax(data->vpu_wakelock);
 	}
-
-	if (!vpu_fp->is_vpu_acquired) {
-		ret = down_timeout(&data->vpu_mutex, msecs_to_jiffies(VPU_AQUIRE_TIMEOUT_MS));
-		vpu_fp->is_vpu_acquired = (ret == 0);
-		pr_info("Acquire vpu mutex before unmap checking, %d\n", ret);
-	}
-
-	non_free_bufs_check((void *)vpu_fp, data);
-
 
 	if (vpu_fp->is_vpu_acquired) {
 		dev_err(data->dev, "Need to up vsp_mutex\n");

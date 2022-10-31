@@ -616,7 +616,6 @@ static int vsp_release(struct inode *inode, struct file *filp)
 {
 	struct vsp_fh *vsp_fp = filp->private_data;
 	int instance_cnt = atomic_read(&vsp_instance_cnt);
-	int ret = 0;
 
 	if (vsp_fp == NULL) {
 		pr_err("%s error occurred, vsp_fp == NULL\n", __func__);
@@ -637,14 +636,6 @@ static int vsp_release(struct inode *inode, struct file *filp)
 		pr_err("error occurred and wakelock relax\n");
 		__pm_relax(vsp_hw_dev.vsp_wakelock);
 	}
-
-	if (!vsp_fp->is_vsp_acquired) {
-		ret = down_timeout(&vsp_hw_dev.vsp_mutex, msecs_to_jiffies(VSP_AQUIRE_TIMEOUT_MS));
-		vsp_fp->is_vsp_acquired = (ret == 0);
-		pr_info("Acquire vsp mutex before unmap checking, %d\n", ret);
-	}
-
-	non_free_bufs_check((void *)vsp_fp, &vsp_hw_dev);
 
 	if (vsp_fp->is_vsp_acquired)
 		up(&vsp_hw_dev.vsp_mutex);
