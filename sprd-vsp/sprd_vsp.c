@@ -282,6 +282,10 @@ static long vsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			pr_err("copy mapdata failed, ret %d\n", ret);
 			return -EFAULT;
 		}
+		if (mapdata.fd < 0) {
+			pr_err("%s %d, mapdata.fd < 0, INVALID\n", __func__, __LINE__);
+			return -EINVAL;
+		}
 
 		ret = vsp_get_iova((void *)vsp_fp, &vsp_hw_dev, &mapdata,
 					(void __user *)arg);
@@ -297,6 +301,10 @@ static long vsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (ret) {
 			pr_err("copy ummapdata failed, ret %d\n", ret);
 			return -EFAULT;
+		}
+		if (ummapdata.fd < 0) {
+			pr_err("%s %d, ummapdata.fd < 0, INVALID\n", __func__, __LINE__);
+			return -EINVAL;
 		}
 
 		ret = vsp_free_iova((void *)vsp_fp, &vsp_hw_dev, &ummapdata);
