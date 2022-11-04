@@ -219,19 +219,6 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			dev_err(dev, "regmap_update_bits failed %s, %d\n",
 				__func__, __LINE__);
 		}
-		/*vpu dec axi safe reset */
-		ret = regmap_update_bits(data->regs[RESET].gpr, 0x00A0, 0x8, 0x8);
-		if (ret) {
-			dev_err(dev, "regmap_update_bits failed %s, %d\n",
-				__func__, __LINE__);
-			break;
-		}
-
-		ret = regmap_update_bits(data->regs[RESET].gpr, 0x00A0, 0x8, 0);
-		if (ret) {
-			dev_err(dev, "regmap_update_bits failed %s, %d\n",
-				__func__, __LINE__);
-		}
 
 		if (data->iommu_exist_flag) {
 			vpu_check_pw_status(data);
