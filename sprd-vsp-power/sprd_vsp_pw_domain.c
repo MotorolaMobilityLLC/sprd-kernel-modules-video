@@ -14,6 +14,7 @@
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/slab.h>
 #include <linux/types.h>
@@ -230,6 +231,10 @@ static int vsp_pd_probe(struct platform_device *pdev)
 
 	pm_genpd_init(&pd->gpd, NULL, true);
 	of_genpd_add_provider_simple(np, &pd->gpd);
+
+	pm_runtime_set_active(dev);
+	pm_runtime_use_autosuspend(dev);
+	pm_runtime_enable(dev);
 
 	return 0;
 }
