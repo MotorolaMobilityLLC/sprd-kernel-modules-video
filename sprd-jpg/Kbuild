@@ -14,6 +14,8 @@ jpg-y := \
 # Build Options
 #
 
+KO_MODULE_PATH := $(src)
+ccflags-y += -I$(KO_MODULE_PATH)/../../../common/camera/power/kernel/
 #
 # Final Objects
 #

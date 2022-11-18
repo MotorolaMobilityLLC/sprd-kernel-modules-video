@@ -111,7 +111,7 @@ enum {
 	AON_APB_EB,
 	RESET
 };
-struct register_gpr {
+struct register_gprrr {
 	struct regmap *gpr;
 	uint32_t reg;
 	uint32_t mask;

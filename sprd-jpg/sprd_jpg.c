@@ -34,6 +34,7 @@
 #include "sprd_jpg.h"
 #include "sprd_jpg_common.h"
 #include "jpg_sys.h"
+#include <sprd_camsys_domain.h>
 
 #ifdef pr_fmt
 #undef pr_fmt
@@ -62,7 +63,7 @@ static char *syscon_name[] = {
 
 static struct clock_name_map_t clock_name_map[ARRAY_SIZE(jpg_clk_src)];
 static struct jpg_qos_cfg qos_cfg;
-static struct register_gpr regs[ARRAY_SIZE(syscon_name)];
+static struct register_gprrr regs[ARRAY_SIZE(syscon_name)];
 
 static irqreturn_t jpg_isr(int irq, void *data);
 static irqreturn_t jpg_isr_thread(int irq, void *data);
@@ -592,6 +593,7 @@ static int jpg_open(struct inode *inode, struct file *filp)
 	hw_dev.condition_work_BSM = 0;
 	hw_dev.jpg_int_status = 0;
 
+	sprd_glb_mm_pw_on_cfg();
 	pm_runtime_get_sync(hw_dev.jpg_dev);
 	jpg_qos_config(&hw_dev);
 	ret = 0;
@@ -625,6 +627,7 @@ static int jpg_release(struct inode *inode, struct file *filp)
 	}
 
 	pm_runtime_mark_last_busy(hw_dev.jpg_dev);
+	sprd_glb_mm_pw_off_cfg();
 	pm_runtime_put_sync(hw_dev.jpg_dev);
 	dev_info(hw_dev.jpg_dev, "jpg pw_off: ret %d", ret);
 
