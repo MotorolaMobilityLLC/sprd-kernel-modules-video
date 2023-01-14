@@ -101,7 +101,7 @@ enum {
 	RESET,
 	VSP_DEV_EB
 };
-struct register_gpr {
+struct register_gprrr {
 	struct regmap *gpr;
 	uint32_t reg;
 	uint32_t mask;
@@ -111,7 +111,7 @@ static char *tb_name[] = {
 	"reset-syscon",
 	"vsp-dev-eb-syscon"
 };
-extern struct register_gpr regs[ARRAY_SIZE(tb_name)];
+extern struct register_gprrr regs[ARRAY_SIZE(tb_name)];
 
 struct vsp_qos_cfg {
 	u8 awqos;

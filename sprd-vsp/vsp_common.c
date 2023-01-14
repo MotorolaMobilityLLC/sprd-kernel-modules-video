@@ -50,7 +50,7 @@ struct system_heap_buffer {
 	bool uncached;
 };
 
-struct register_gpr regs[ARRAY_SIZE(tb_name)];
+struct register_gprrr regs[ARRAY_SIZE(tb_name)];
 
 struct clk *vsp_get_clk_src_name(struct clock_name_map_t clock_name_map[],
 				unsigned int freq_level,

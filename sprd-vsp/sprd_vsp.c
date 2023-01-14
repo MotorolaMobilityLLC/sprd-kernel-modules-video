@@ -35,6 +35,8 @@
 #include "sprd_vsp.h"
 #include "vsp_common.h"
 //#include "sprd_dvfs_vsp.h"
+#include <sprd_camsys_domain.h>
+
 
 #ifdef pr_fmt
 #undef pr_fmt
@@ -600,6 +602,9 @@ static int vsp_open(struct inode *inode, struct file *filp)
 	vsp_fp->vsp_int_status = 0;
 	vsp_fp->condition_work = 0;
 
+	if (vsp_hw_dev.version == PIKE2)
+		ret = sprd_glb_mm_pw_on_cfg();
+
 	pm_runtime_get_sync(vsp_hw_dev.vsp_dev);
 	//atomic_read(&vsp_hw_dev.vsp_dev->power.usage_count);
 
@@ -641,6 +646,8 @@ static int vsp_release(struct inode *inode, struct file *filp)
 		up(&vsp_hw_dev.vsp_mutex);
 
 	pm_runtime_mark_last_busy(vsp_hw_dev.vsp_dev);
+	if (vsp_hw_dev.version == PIKE2)
+		sprd_glb_mm_pw_off_cfg();
 	pm_runtime_put_autosuspend(vsp_hw_dev.vsp_dev);
 
 	kfree(filp->private_data);

@@ -18,3 +18,5 @@ vsp-y := \
 # Final Objects
 #
 obj-$(CONFIG_UNISOC_VSP) := vsp.o
+KO_MODULE_PATH := $(src)
+EXTRA_CFLAGS += -I$(KO_MODULE_PATH)/../../../common/camera/power/kernel/
