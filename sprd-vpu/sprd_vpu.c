@@ -432,7 +432,8 @@ static int vpu_release(struct inode *inode, struct file *filp)
 	atomic_dec(&data->instance_cnt);
 
 	if (vpu_fp->is_clock_enabled) {
-		dev_err(data->dev, "error occurred and clk disable\n");
+		mdelay(100);
+		dev_err(data->dev, "delay 100ms, error occurred and clk disable\n");
 		clock_disable(data);
 	}
 	if (vpu_fp->is_wakelock_got) {
