@@ -1,9 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0-only */
 /*
-* Unisoc QOGIRN6PRO VSP driver
-*
-* Copyright (C) 2019 Unisoc, Inc.
+*SPDX-FileCopyrightText: 2019 Unisoc (Shanghai) Technologies Co.Ltd
+*SPDX-License-Identifier: GPL-2.0-only
 */
+
 #define CAM_JPG_SOC_QOS_BASE 0x30000000
 #define JPG_SOC_QOS_BASE 0x30070000
 #define SYS_MTX_CFG_EN 0x0

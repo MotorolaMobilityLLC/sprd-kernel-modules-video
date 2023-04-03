@@ -1,9 +1,7 @@
-// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Unisoc QOGIRN6PRO VPU power driver
- *
- * Copyright (C) 2019 Unisoc, Inc.
- */
+*SPDX-FileCopyrightText: 2019 Unisoc (Shanghai) Technologies Co.Ltd
+*SPDX-License-Identifier: GPL-2.0-only
+*/
 
 #include <linux/delay.h>
 #include <linux/errno.h>

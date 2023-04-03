@@ -1,15 +1,9 @@
 /*
- * Copyright (C) 2012--2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+*SPDX-FileCopyrightText: 2012-2015 Spreadtrum (Shanghai) Technologies Co.Ltd
+*SPDX-FileCopyrightText: 2016 Unisoc (Shanghai) Technologies Co.Ltd
+*SPDX-License-Identifier: LicenseRef-Unisoc-General-1.0 or GPL-2.0-only
+*/
+
 #ifndef _SPRD_JPG_H
 #define _SPRD_JPG_H
 

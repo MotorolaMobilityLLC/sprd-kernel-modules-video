@@ -1,9 +1,8 @@
-/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Unisoc QOGIRN6PRO VPU driver
- *
- * Copyright (C) 2019 Unisoc, Inc.
- */
+*SPDX-FileCopyrightText: 2019 Unisoc (Shanghai) Technologies Co.Ltd
+*SPDX-License-Identifier: GPL-2.0-only
+*/
+
 #ifndef _SPRD_VPU_H
 #define _SPRD_VPU_H
 

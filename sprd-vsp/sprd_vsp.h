@@ -1,9 +1,7 @@
-/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Unisoc UMS512 VSP driver
- *
- * Copyright (C) 2019 Unisoc, Inc.
- */
+*SPDX-FileCopyrightText: 2019 Unisoc (Shanghai) Technologies Co.Ltd
+*SPDX-License-Identifier: GPL-2.0-only
+*/
 
 #ifndef _SPRD_VSP_H
 #define _SPRD_VSP_H

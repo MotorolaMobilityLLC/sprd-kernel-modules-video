@@ -1,3 +1,6 @@
+#SPDX-FileCopyrightText: 2019 Unisoc (Shanghai) Technologies Co.Ltd
+#SPDX-License-Identifier: GPL-2.0-only
+
 # Note:
 # - Build arguments(ARCH CROSS_COMPILE O BSP_MAKE_EXTRA_ARGS
 #   INSTALL_MOD_PATH etc.) are passed by parent make
