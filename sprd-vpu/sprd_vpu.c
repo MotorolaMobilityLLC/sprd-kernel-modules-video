@@ -35,17 +35,72 @@
 #include "sprd_vpu.h"
 #include "vpu_drv.h"
 #include "sprd_dvfs_vsp.h"
+#include <sprd_camsys_domain.h>
+
 
 #ifdef pr_fmt
 #undef pr_fmt
 #endif
 #define pr_fmt(fmt) "sprd-vpu: " fmt
 
+struct mmu_reg reg_list[] = {
+#include "mmu_reg_list.h"
+};
+
+static const struct core_data sharkle_vsp_data = {
+	.name = "sprd_vsp",
+	.isr = common_isr,
+	.is_enc = 0,
+	.dev_eb_mask = BIT(2),
+	.ops = &vsp_hevc_lite,   /*defined in vsp_hevc_lite.c*/
+	.mmu_reg = &reg_list[0],
+};
+
+
+static const struct core_data pike2_vsp_data = {
+	.name = "sprd_vsp",
+	.isr = common_isr,
+	.is_enc = 0,
+	.dev_eb_mask = BIT(2),
+	.ops = &vsp_pike2,   /*defined in vsp_1080p_r1p0.c*/
+	.mmu_reg = &reg_list[0],
+};
+
+static const struct core_data sharkl3_vsp_data = {
+	.name = "sprd_vsp",
+	.isr = common_isr,
+	.is_enc = 0,
+	.dev_eb_mask = BIT(1),
+	.ops = &vsp_sharkl3,  /*defined in vsp_hevc_lite_r1p0.c*/
+	.mmu_reg = &reg_list[1],
+};
+
+static const struct core_data sharkl5_vsp_data = {
+	.name = "sprd_vsp",
+	.isr = common_isr,
+	.is_enc = 0,
+	.dev_eb_mask = BIT(2),
+	.ops = &vsp_hevc_lite,  /*defined in vsp_hevc_lite.c*/
+	.mmu_reg = &reg_list[1],
+};
+
+
+static const struct core_data sharkl5pro_vsp_data = {
+	.name = "sprd_vsp",
+	.isr = common_isr,
+	.is_enc = 0,
+	.dev_eb_mask = BIT(2),
+	.ops = &vsp_hevc_lite,
+	.mmu_reg = &reg_list[2],
+};
+
 static const struct core_data enc_core0 = {
 	.name = "vpu_enc0",
 	.isr = enc_core0_isr,
 	.is_enc = 1,
 	.dev_eb_mask = BIT(3),
+	.ops = &vpu_r1p0,  /*defined in vpu_r1p0.c*/
+	.mmu_reg = &reg_list[2],
 };
 
 static const struct core_data enc_core1 = {
@@ -53,31 +108,39 @@ static const struct core_data enc_core1 = {
 	.isr = enc_core1_isr,
 	.is_enc = 1,
 	.dev_eb_mask = BIT(4),
+	.ops = &vpu_r1p0,
+	.mmu_reg = &reg_list[2],
 };
 
 static const struct core_data dec_core0 = {
 	.name = "sprd_vsp",
-	.isr = dec_core0_isr,
+	.isr = common_isr,
 	.is_enc = 0,
 	.dev_eb_mask = BIT(5),
+	.ops = &vpu_r1p0,
+	.mmu_reg = &reg_list[2],
 };
 
 static const struct of_device_id of_match_table_vpu[] = {
+	{.compatible = "sprd,sharkle-vsp", .data = &sharkle_vsp_data},
+	{.compatible = "sprd,pike2-vsp", .data = &pike2_vsp_data},
+	{.compatible = "sprd,sharkl3-vsp", .data = &sharkl3_vsp_data},
+	{.compatible = "sprd,sharkl5-vsp", .data = &sharkl5_vsp_data},
+	{.compatible = "sprd,sharkl5pro-vsp", .data = &sharkl5pro_vsp_data},
 	{.compatible = "sprd,vpu-enc-core0", .data = &enc_core0},
 	{.compatible = "sprd,vpu-enc-core1", .data = &enc_core1},
 	{.compatible = "sprd,vpu-dec-core0", .data = &dec_core0},
 	{},
 };
 
-
-
-
 static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int ret = 0;
 	struct vpu_fp *vpu_fp = filp->private_data;
 	struct vpu_platform_data *data = vpu_fp->dev_data;
+	const struct vpu_ops *ops = data->p_data->ops;
 	u32 mm_eb_reg;
+	u32 tmp_rst_msk = 0;
 	struct device *dev = data->dev;
 
 	struct clk *clk_parent;
@@ -111,7 +174,7 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		__pm_stay_awake(data->vpu_wakelock);
 		vpu_fp->is_wakelock_got = true;
 
-		ret = clock_enable(data);
+		ret = ops->clock_enable(data);
 		if (ret == 0) {
 			vpu_fp->is_clock_enabled = true;
 #if IS_ENABLED(CONFIG_DVFS_APSYS_SPRD)
@@ -127,7 +190,7 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (vpu_fp->is_clock_enabled) {
 			clr_vpu_interrupt_mask(data);
 			vpu_fp->is_clock_enabled = false;
-			clock_disable(data);
+			ops->clock_disable(data);
 		}
 		vpu_fp->is_wakelock_got = false;
 		__pm_relax(data->vpu_wakelock);
@@ -199,11 +262,11 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	case VPU_RESET:
 		dev_dbg(dev, "vpu ioctl VPU_RESET\n");
-
+		tmp_rst_msk = ops->get_reset_mask(data);
 		ret = regmap_update_bits(data->regs[RESET].gpr,
 			data->regs[RESET].reg,
-			data->regs[RESET].mask,
-			data->regs[RESET].mask);
+			tmp_rst_msk,
+			tmp_rst_msk);
 		if (ret) {
 			dev_err(dev, "regmap_update_bits failed %s, %d\n",
 				__func__, __LINE__);
@@ -212,15 +275,27 @@ static long vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 		ret = regmap_update_bits(data->regs[RESET].gpr,
 			data->regs[RESET].reg,
-			data->regs[RESET].mask, 0);
+			tmp_rst_msk, 0);
 		if (ret) {
 			dev_err(dev, "regmap_update_bits failed %s, %d\n",
 				__func__, __LINE__);
 		}
 
 		if (data->iommu_exist_flag) {
-			vpu_check_pw_status(data);
+			ops->check_pw_status(data);
 			sprd_iommu_restore(data->dev);
+		}
+
+		if (data->qos_exist_flag) {
+			if (data->version == SHARKL5Pro) {
+				writel_relaxed(((data->qos.awqos & 0x7) << 29) |
+				((data->qos.arqos_low & 0x7) << 23),
+				 data->glb_reg_base + data->qos.reg_offset);
+			} else {
+				writel_relaxed(((data->qos.awqos & 0x7) << 8) |
+				(data->qos.arqos_low & 0x7),
+				data->glb_reg_base + data->qos.reg_offset);
+			}
 		}
 
 		break;
@@ -316,6 +391,7 @@ static int vpu_parse_dt(struct vpu_platform_data *data)
 	struct platform_device *pdev = data->pdev;
 	struct device *dev = &(pdev->dev);
 	struct device_node *np = dev->of_node;
+	struct device_node *qos_np = NULL;
 	struct resource *res;
 	int i, ret = 0;
 	char *pname;
@@ -361,8 +437,33 @@ static int vpu_parse_dt(struct vpu_platform_data *data)
 
 	dev_info(dev, "%s: irq = 0x%x, phys_addr = 0x%lx\n",
 		data->p_data->name, data->irq, data->phys_addr);
+	get_freq_clk(data, np);
+	data->p_data->ops->get_eb_clk(data, np);
 
-	get_clk(data, np);
+	qos_np = of_parse_phandle(np, "sprd,qos", 0);
+	if (!qos_np) {
+		dev_warn(dev, "can't find vsp qos cfg node\n");
+		data->qos_exist_flag = 0;
+	} else {
+		ret = of_property_read_u8(qos_np, "awqos",
+						&data->qos.awqos);
+		if (ret)
+			dev_info(dev, "read awqos_low failed, use default\n");
+
+		ret = of_property_read_u8(qos_np, "arqos-low",
+						&data->qos.arqos_low);
+		if (ret)
+			dev_info(dev, "read arqos-low failed, use default\n");
+
+		ret = of_property_read_u8(qos_np, "arqos-high",
+						&data->qos.arqos_high);
+		if (ret)
+			dev_info(dev, "read arqos-high failed, use default\n");
+		data->qos_exist_flag = 1;
+
+		dev_info(dev, "%x, %x, %x, %x", data->qos.awqos, data->qos.arqos_high,
+			data->qos.arqos_low, data->qos.reg_offset);
+	}
 
 	data->iommu_exist_flag =
 		(sprd_iommu_attach_device(data->dev) == 0);
@@ -409,6 +510,14 @@ static int vpu_open(struct inode *inode, struct file *filp)
 	filp->private_data = vpu_fp;
 	atomic_inc(&data->instance_cnt);
 	dev_info(data->dev, "%s, open", data->p_data->name);
+
+#if defined (PROJ_PIKE2)
+	ret = sprd_glb_mm_pw_on_cfg();
+	if (ret != 0) {
+		pr_info("%s: vsp power on failed %d !\n", __func__, ret);
+		return ret;
+	}
+#endif
 	pm_runtime_get_sync(data->dev);
 	vpu_qos_config(data);
 
@@ -432,7 +541,7 @@ static int vpu_release(struct inode *inode, struct file *filp)
 	if (vpu_fp->is_clock_enabled) {
 		mdelay(100);
 		dev_err(data->dev, "delay 100ms, error occurred and clk disable\n");
-		clock_disable(data);
+		data->p_data->ops->clock_disable(data);
 	}
 	if (vpu_fp->is_wakelock_got) {
 		dev_err(data->dev, "error occurred and wakelock relax\n");
@@ -447,8 +556,12 @@ static int vpu_release(struct inode *inode, struct file *filp)
 	kfree(vpu_fp);
 
 	pm_runtime_mark_last_busy(data->dev);
-	pm_runtime_put_sync(data->dev);
 
+#if defined (PROJ_PIKE2)
+	sprd_glb_mm_pw_off_cfg();
+#endif
+
+	pm_runtime_put_sync(data->dev);
 	return 0;
 }
 

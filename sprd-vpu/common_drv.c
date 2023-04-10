@@ -68,11 +68,12 @@ void vpu_qos_config(struct vpu_platform_data *data)
 	unsigned int i = 0, vpu_qos_num = 0, dpu_vpu_qos_num = 0;
 	int reg_val;
 	struct vpu_qos_reg *vpu_mtx_qos = NULL;
+	const struct vpu_ops *ops = data->p_data->ops;
 
 	/*static volatile unsigned int *base_addr_virt;*/
 	unsigned int *base_addr_virt;
 
-	clock_enable(data);
+	ops->clock_enable(data);
 
 	if (data->version == QOGIRN6PRO) {
 		vpu_mtx_qos = vpu_mtx_qos_qogirn6pro;
@@ -82,6 +83,8 @@ void vpu_qos_config(struct vpu_platform_data *data)
 		vpu_qos_num = ARRAY_SIZE(vpu_mtx_qos_qogirn6lite);
 	} else {
 		pr_info("No vpu qos config");
+		ops->clock_disable(data);
+		return;
 	}
 
 	dpu_vpu_qos_num = ARRAY_SIZE(dpu_vpu_mtx_qos);//? N6L
@@ -102,19 +105,28 @@ void vpu_qos_config(struct vpu_platform_data *data)
 		iounmap(base_addr_virt);
 	}
 
-	clock_disable(data);
+	ops->clock_disable(data);
 }
 
-static int handle_vpu_dec_interrupt(struct vpu_platform_data *data, int *status)
+static int handle_common_interrupt(struct vpu_platform_data *data, int *status)
 {
 	int i;
 	int int_status;
 	int mmu_status;
 	struct device *dev = data->dev;
+	struct mmu_reg *mmu_reg = data->p_data->mmu_reg;
 
 	int_status = readl_relaxed(data->glb_reg_base + VPU_INT_RAW_OFF);
-	mmu_status = readl_relaxed(data->vpu_base + VPU_MMU_INT_STS_OFF);
-	*status |= int_status | (mmu_status << 16);
+
+	if (mmu_reg->mmu_int_en_off) {
+		mmu_status = readl_relaxed(data->vpu_base + mmu_reg->mmu_int_raw_off);
+		*status |= int_status | (mmu_status << 16);
+	} else {
+		/* for sharkle and pike2 */
+		*status = int_status;
+		mmu_status = (int_status >> 10) & 0xff;
+		int_status = *status & 0x3ff;
+	}
 
 	if (((int_status & 0xffff) == 0) &&
 		((mmu_status & 0xff) == 0)) {
@@ -143,10 +155,13 @@ static int handle_vpu_dec_interrupt(struct vpu_platform_data *data, int *status)
 
 	if (mmu_status & MMU_RD_WR_ERR) {
 		/* mmu ERR */
-		dev_err(dev, "dec iommu addr: 0x%x\n",
-		       readl_relaxed(data->vpu_base + VPU_MMU_INT_RAW_OFF));
+		dev_err(dev, "dec iommu addr: 0x%x\n",mmu_status);
 
-		for (i = 0x44; i <= 0x68; i += 4)
+		for (i = mmu_reg->mmu_vaor_addr_rd; i <= mmu_reg->mmu_uns_addr_wr; i += 4)
+			dev_info(dev, "addr 0x%x is 0x%x\n", i,
+				readl_relaxed(data->vpu_base + i));
+
+		for (i = mmu_reg->mmu_vpn_paor_rd; i <= mmu_reg->mmu_ppn_paor_wr; i += 4)
 			dev_info(dev, "addr 0x%x is 0x%x\n", i,
 				readl_relaxed(data->vpu_base + i));
 		WARN_ON_ONCE(1);
@@ -164,9 +179,10 @@ static int handle_vpu_enc_interrupt(struct vpu_platform_data *data, int *status)
 	int int_status;
 	int mmu_status;
 	struct device *dev = data->dev;
+	struct mmu_reg *mmu_reg = data->p_data->mmu_reg;
 
 	int_status = readl_relaxed(data->glb_reg_base + VPU_INT_RAW_OFF);
-	mmu_status = readl_relaxed(data->vpu_base + VPU_MMU_INT_RAW_OFF);
+	mmu_status = readl_relaxed(data->vpu_base + mmu_reg->mmu_int_raw_off);
 	*status |= int_status | (mmu_status << 16);
 
 	if (((int_status & 0x7f) == 0) &&
@@ -193,10 +209,13 @@ static int handle_vpu_enc_interrupt(struct vpu_platform_data *data, int *status)
 
 	if (mmu_status & MMU_RD_WR_ERR) {
 		/* mmu ERR */
-		dev_err(dev, "enc iommu addr: 0x%x\n",
-		       readl_relaxed(data->vpu_base + VPU_MMU_INT_RAW_OFF));
+		dev_err(dev, "enc iommu addr: 0x%x\n",mmu_status);
 
-		for (i = 0x44; i <= 0x68; i += 4)
+		for (i = mmu_reg->mmu_vaor_addr_rd; i <= mmu_reg->mmu_uns_addr_wr; i += 4)
+			dev_info(dev, "addr 0x%x is 0x%x\n", i,
+				readl_relaxed(data->vpu_base + i));
+
+		for (i = mmu_reg->mmu_vpn_paor_rd; i <= mmu_reg->mmu_ppn_paor_wr; i += 4)
 			dev_info(dev, "addr 0x%x is 0x%x\n", i,
 				readl_relaxed(data->vpu_base + i));
 		WARN_ON_ONCE(1);
@@ -212,20 +231,37 @@ void clr_vpu_interrupt_mask(struct vpu_platform_data *data)
 {
 	int vpu_int_mask = 0;
 	int mmu_int_mask = 0;
+	int cmd = 0;
+	struct mmu_reg *mmu_reg = data->p_data->mmu_reg;
 
-	vpu_int_mask = 0x1fff;
-	mmu_int_mask = 0xff;
+	if (mmu_reg->mmu_int_en_off) {
+		vpu_int_mask = 0x1fff;
+		mmu_int_mask = 0xff;
+	} else {
+		/* use for PIKE2, SHARKLE or the chip before them */
+		/*set the interrupt mask 0 */
+		cmd = readl_relaxed(data->vpu_base + ARM_INT_MASK_OFF);
+		cmd &= ~0x4;
+		writel_relaxed(cmd, data->vpu_base + ARM_INT_MASK_OFF);
+		writel_relaxed(BIT(2), data->vpu_base + ARM_INT_CLR_OFF);
+		vpu_int_mask = 0x3ffff;
+	}
 
 	/* set the interrupt mask 0 */
 	writel_relaxed(0, data->glb_reg_base + VPU_INT_MASK_OFF);
-	writel_relaxed(0, data->vpu_base + VPU_MMU_INT_MASK_OFF);
+	if (mmu_reg->mmu_int_en_off) {
+		writel_relaxed(0, data->vpu_base + mmu_reg->mmu_int_en_off);
+	}
 
 	/* clear vsp int */
 	writel_relaxed(vpu_int_mask, data->glb_reg_base + VPU_INT_CLR_OFF);
-	writel_relaxed(mmu_int_mask, data->vpu_base + VPU_MMU_INT_CLR_OFF);
+	if (mmu_reg->mmu_int_en_off) {
+		writel_relaxed(mmu_int_mask, data->vpu_base + mmu_reg->mmu_int_clr_off);
+	}
+
 }
 
-static irqreturn_t vpu_dec_isr_handler(struct vpu_platform_data *data)
+static irqreturn_t common_isr_handler(struct vpu_platform_data *data)
 {
 	int ret, status = 0;
 	struct vpu_fp *inst_ptr = NULL;
@@ -247,7 +283,7 @@ static irqreturn_t vpu_dec_isr_handler(struct vpu_platform_data *data)
 	}
 
 	/* check which module occur interrupt and clear corresponding bit */
-	ret = handle_vpu_dec_interrupt(data, &status);
+	ret = handle_common_interrupt(data, &status);
 	if (ret == IRQ_NONE)
 		return IRQ_NONE;
 
@@ -318,14 +354,14 @@ irqreturn_t enc_core1_isr(int irq, void *data)
 	return ret;
 }
 
-irqreturn_t dec_core0_isr(int irq, void *data)
+irqreturn_t common_isr(int irq, void *data)
 {
 	struct vpu_platform_data *vpu_core = data;
 	int ret = 0;
 
 	dev_dbg(vpu_core->dev, "%s, isr", vpu_core->p_data->name);
 
-	ret = vpu_dec_isr_handler(data);
+	ret = common_isr_handler(data);
 
 	/*Do dec core0 specified work here, if needed.*/
 
@@ -374,29 +410,11 @@ long compat_vpu_ioctl(struct file *filp, unsigned int cmd,
 }
 #endif
 
-void vpu_check_pw_status(struct vpu_platform_data *data)
+void vsp_check_pw_status(struct vpu_platform_data *data)
 {
 	int ret = 0;
-	u32 dpu_vsp_eb, dpu_vsp_apb_regs;
+	u32 dpu_vsp_apb_regs;
 
-	regmap_read(data->regs[VPU_DOMAIN_EB].gpr,
-			data->regs[VPU_DOMAIN_EB].reg, &dpu_vsp_eb);
-
-	/*aon_apb regs BIT(21) DPU_VSP_EB*/
-	if ((dpu_vsp_eb & data->regs[VPU_DOMAIN_EB].mask) !=
-			data->regs[VPU_DOMAIN_EB].mask) {
-		dev_err(data->dev, "dpu_vsp_eb 0x%x\n", dpu_vsp_eb);
-		ret = regmap_update_bits(data->regs[VPU_DOMAIN_EB].gpr,
-					data->regs[VPU_DOMAIN_EB].reg,
-					data->regs[VPU_DOMAIN_EB].mask,
-					data->regs[VPU_DOMAIN_EB].mask);
-	}
-
-	/*
-	 * dpu_vsp_apb_regs 0x30100000
-	 * APB_EB(dev_eb) 0x0000 bit3:enc0_eb bit4:enc1_eb bit 5:dec_eb
-	 * APB_RST 0x0004 bit3:enc0_rst bit4:enc1_rst bit 5:dec_rst
-	 */
 	regmap_read(data->regs[RESET].gpr, 0x0, &dpu_vsp_apb_regs); /*dev_eb*/
 
 	if ((dpu_vsp_apb_regs & data->p_data->dev_eb_mask) !=
@@ -449,9 +467,10 @@ int get_iova(void *inst_ptr, struct vpu_platform_data *data,
 	struct dma_buf_attachment *attachment = NULL;
 	struct sg_table *table = NULL;
 	struct vpu_iommu_map_entry *entry = NULL;
+	const struct vpu_ops *ops = data->p_data->ops;
 
-	clock_enable(data);
-	vpu_check_pw_status(data);
+	ops->clock_enable(data);
+	ops->check_pw_status(data);
 	ret = vsp_get_dmabuf(mapdata->fd, &dmabuf,
 					&(iommu_map_data.buf),
 					&iommu_map_data.iova_size);
@@ -520,7 +539,7 @@ int get_iova(void *inst_ptr, struct vpu_platform_data *data,
 			ret, iommu_map_data.iova_size);
 		goto err_iommu_map;
 	}
-	clock_disable(data);
+	ops->clock_disable(data);
 	return ret;
 
 err_copy_to_user:
@@ -542,7 +561,7 @@ err_map_attachment:
 			dma_buf_detach(dmabuf, attachment);
 err_attach:
 err_get_dmabuf:
-		clock_disable(data);
+		ops->clock_disable(data);
 
 		return ret;
 }
@@ -553,9 +572,10 @@ int free_iova(void *inst_ptr, struct vpu_platform_data *data,
 	int ret = 0;
 	struct vpu_iommu_map_entry *entry = NULL;
 	struct sprd_iommu_unmap_data iommu_ummap_data = {0};
+	const struct vpu_ops *ops = data->p_data->ops;
 	int b_find = 0;
 
-	clock_enable(data);
+	ops->clock_enable(data);
 	mutex_lock(&data->map_lock);
 	list_for_each_entry(entry, &data->map_list, list) {
 		if (entry->iova_addr == ummapdata->iova_addr &&
@@ -578,7 +598,7 @@ int free_iova(void *inst_ptr, struct vpu_platform_data *data,
 		pr_err("fatal error! not find node(inst %p, iova_addr=%#llx, size=%llu)\n",
 				inst_ptr, ummapdata->iova_addr, ummapdata->size);
 		mutex_unlock(&data->map_lock);
-		clock_disable(data);
+		ops->clock_disable(data);
 		return -EFAULT;
 	}
 	mutex_unlock(&data->map_lock);
@@ -587,7 +607,7 @@ int free_iova(void *inst_ptr, struct vpu_platform_data *data,
 	if (ret) {
 		pr_err("sprd_iommu_unmap failed: ret=%d, iova_addr=%#llx, size=%llu\n",
 			ret, ummapdata->iova_addr, ummapdata->size);
-		clock_disable(data);
+		ops->clock_disable(data);
 		return ret;
 	}
 	pr_debug("sprd_iommu_unmap success: iova_addr=%#llx size=%llu\n",
@@ -601,19 +621,19 @@ int free_iova(void *inst_ptr, struct vpu_platform_data *data,
 
 	kfree(entry);
 
-	clock_disable(data);
+	ops->clock_disable(data);
 
 	return ret;
 }
 
-int get_clk(struct vpu_platform_data *data, struct device_node *np)
+u32 get_reset_mask(struct vpu_platform_data *data)
 {
-	int ret = 0, i, j = 0;
-	struct clk *clk_dev_eb;
-	struct clk *core_clk;
-	struct clk *clk_domain_eb;
-	struct clk *clk_ckg_eb;
-	struct clk *clk_ahb_vsp;
+	return data->regs[RESET].mask;
+}
+
+void get_freq_clk(struct vpu_platform_data *data, struct device_node *np)
+{
+	int i, j = 0;
 	struct clk *clk_parent;
 	struct device *dev = data->dev;
 
@@ -639,29 +659,14 @@ int get_clk(struct vpu_platform_data *data, struct device_node *np)
 	}
 	data->max_freq_level = j;
 
+}
 
-	clk_domain_eb = devm_clk_get(data->dev, "clk_domain_eb");
-
-	if (IS_ERR_OR_NULL(clk_domain_eb)) {
-		dev_err(dev, "Failed: Can't get clock [%s]! %p\n",
-		       "clk_domain_eb", clk_domain_eb);
-		data->clk.clk_domain_eb = NULL;
-		ret = -EINVAL;
-		goto errout;
-	} else
-		data->clk.clk_domain_eb = clk_domain_eb;
-
-	clk_dev_eb =
-		devm_clk_get(data->dev, "clk_dev_eb");
-
-	if (IS_ERR_OR_NULL(clk_dev_eb)) {
-		dev_err(dev, "Failed: Can't get clock [%s]! %p\n",
-		       "clk_dev_eb", clk_dev_eb);
-		ret = -EINVAL;
-		data->clk.clk_dev_eb = NULL;
-		goto errout;
-	} else
-		data->clk.clk_dev_eb = clk_dev_eb;
+int get_eb_clk_lite(struct vpu_platform_data *data, struct device_node *np)
+{
+	int ret = 0;
+	struct clk *core_clk;
+	struct clk *clk_ahb_gate_vsp_eb;
+	struct device *dev = data->dev;
 
 	core_clk = devm_clk_get(data->dev, "clk_vsp");
 
@@ -674,117 +679,66 @@ int get_clk(struct vpu_platform_data *data, struct device_node *np)
 	} else
 		data->clk.core_clk = core_clk;
 
-	clk_ahb_vsp =
-		devm_clk_get(data->dev, "clk_ahb_vsp");
-
-	if (IS_ERR_OR_NULL(clk_ahb_vsp)) {
-		dev_err(dev, "Failed: Can't get clock [%s]! %p\n",
-		       "clk_ahb_vsp", clk_ahb_vsp);
+	clk_ahb_gate_vsp_eb = devm_clk_get(data->dev, "clk_ahb_gate_vsp_eb");
+	if (IS_ERR_OR_NULL(clk_ahb_gate_vsp_eb)) {
+		dev_err(dev, "Failed: Can't get clock [%s]! %p\n", "clk_ahb_gate_vsp_eb",
+			   clk_ahb_gate_vsp_eb);
 		ret = -EINVAL;
+		data->clk.clk_ahb_gate_vsp_eb = NULL;
 		goto errout;
 	} else
-		data->clk.clk_ahb_vsp = clk_ahb_vsp;
-
-	clk_ckg_eb =
-		devm_clk_get(data->dev, "clk_ckg_eb");
-
-	if (IS_ERR_OR_NULL(clk_ckg_eb)) {
-		dev_err(dev, "Failed: Can't get clock [%s]! %p\n",
-		       "clk_ckg_eb", clk_ckg_eb);
-		ret = -EINVAL;
-		goto errout;
-	} else
-		data->clk.clk_ckg_eb = clk_ckg_eb;
-
-	clk_parent = devm_clk_get(data->dev,
-		       "clk_ahb_vsp_parent");
-
-	if (IS_ERR_OR_NULL(clk_parent)) {
-		dev_err(dev, "clock[%s]: failed to get parent in probe!\n",
-		       "clk_ahb_vsp_parent");
-		ret = -EINVAL;
-		goto errout;
-	} else
-		data->clk.ahb_parent_clk = clk_parent;
+		data->clk.clk_ahb_gate_vsp_eb = clk_ahb_gate_vsp_eb;
+	dev_err(dev, "for sharkle sharkl5 sharkl5pro sharkl6");
+	/*for sharkle sharkl5 sharkl5pro sharkl6*/
 
 errout:
 	return ret;
 }
 
-int clock_enable(struct vpu_platform_data *data)
+int clock_enable_lite(struct vpu_platform_data *data)
 {
 	int ret = 0;
 	struct vpu_clk *clk = &data->clk;
 	struct device *dev = data->dev;
 
-	if (clk->clk_domain_eb) {
-		ret = clk_prepare_enable(clk->clk_domain_eb);
+    if (clk->clk_ahb_gate_vsp_eb) {
+		ret = clk_prepare_enable(clk->clk_ahb_gate_vsp_eb);
 		if (ret) {
-			dev_err(dev, "vsp clk_domain_eb: clk_enable failed!\n");
+			dev_err(dev, "vsp clk_ahb_gate_vsp_eb: clk_enable failed!\n");
 			goto error1;
 		}
-		dev_dbg(dev, "vsp clk_domain_eb: clk_prepare_enable ok.\n");
+		dev_dbg(dev, "vsp clk_ahb_gate_vsp_eb: clk_prepare_enable ok.\n");
 	}
-
-
-	if (clk->clk_dev_eb) {
-		ret = clk_prepare_enable(clk->clk_dev_eb);
+	ret = clk_set_parent(clk->core_clk, clk->core_parent_clk);
 		if (ret) {
-			dev_err(dev, "clk_dev_eb: clk_prepare_enable failed!\n");
+			dev_err(dev, "clock[%s]: clk_set_parent() failed!", "clk_core");
 			goto error2;
 		}
-		dev_dbg(dev, "clk_dev_eb: clk_prepare_enable ok.\n");
-	}
-
-	if (clk->clk_ahb_vsp) {
-		ret = clk_set_parent(clk->clk_ahb_vsp, clk->ahb_parent_clk);
-		if (ret) {
-			dev_err(dev, "clock[%s]: clk_set_parent() failed!",
-				"ahb_parent_clk");
-			goto error3;
-		}
-		ret = clk_prepare_enable(clk->clk_ahb_vsp);
-		if (ret) {
-			dev_err(dev, "clk_ahb_vsp: clk_prepare_enable failed!\n");
-			goto error3;
-		}
-		dev_dbg(dev, "clk_ahb_vsp: clk_prepare_enable ok.\n");
-	}
-
-	ret = clk_set_parent(clk->core_clk, clk->core_parent_clk);
-	if (ret) {
-		dev_err(dev, "clock[%s]: clk_set_parent() failed!", "clk_core");
-		goto error4;
-	}
 
 	ret = clk_prepare_enable(clk->core_clk);
 	if (ret) {
 		dev_err(dev, "core_clk: clk_prepare_enable failed!\n");
-		goto error4;
+		goto error2;
 	}
 	dev_dbg(dev, "vsp_clk: clk_prepare_enable ok.\n");
 
 	dev_dbg(data->dev, "%s %d,OK\n", __func__, __LINE__);
-
 	return ret;
 
-error4:
-	clk_disable_unprepare(clk->clk_ahb_vsp);
-error3:
-	clk_disable_unprepare(clk->clk_dev_eb);
 error2:
-	clk_disable_unprepare(clk->clk_domain_eb);
+	clk_disable_unprepare(clk->clk_ahb_gate_vsp_eb);
 error1:
 	return ret;
+
 }
 
-void clock_disable(struct vpu_platform_data *data)
+void clock_disable_lite(struct vpu_platform_data *data)
 {
 	struct vpu_clk *clk = &data->clk;
 
 	clk_disable_unprepare(clk->core_clk);
-	clk_disable_unprepare(clk->clk_ahb_vsp);
-	clk_disable_unprepare(clk->clk_dev_eb);
-	clk_disable_unprepare(clk->clk_domain_eb);
+	clk_disable_unprepare(clk->clk_ahb_gate_vsp_eb);
+
 	dev_dbg(data->dev, "%s %d,OK\n", __func__, __LINE__);
 }
+

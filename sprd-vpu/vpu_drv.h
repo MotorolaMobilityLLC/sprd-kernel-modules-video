@@ -44,7 +44,7 @@ enum {
 	RESET
 };
 
-struct register_gpr {
+struct register_gprrr {
 	struct regmap *gpr;
 	uint32_t reg;
 	uint32_t mask;
@@ -56,6 +56,8 @@ static char *tb_name[] = {
 };
 
 static char *vpu_clk_src[] = {
+	"clk_src_76m8",
+	"clk_src_128m",
 	"clk_src_256m",
 	"clk_src_307m2",
 	"clk_src_384m",
@@ -64,12 +66,26 @@ static char *vpu_clk_src[] = {
 	"clk_src_680m"
 };
 
-struct core_data {
-	const char *name;
-	irqreturn_t (*isr)(int irq, void *data);
-	bool is_enc;
-	u32 dev_eb_mask;
-};
+typedef struct mmu_reg
+{
+	u32 mmu_vaor_addr_rd;
+	u32 mmu_vaor_addr_wr;
+	u32 mmu_inv_addr_rd;
+	u32 mmu_inv_addr_wr;
+	u32 mmu_uns_addr_rd;
+	u32 mmu_uns_addr_wr;
+	u32 mmu_vpn_paor_rd;
+	u32 mmu_vpn_paor_wr;
+	u32 mmu_ppn_paor_rd;
+	u32 mmu_ppn_paor_wr;
+	u32 mmu_int_en_off;
+	u32 mmu_int_clr_off;
+	u32 mmu_int_sts_off;
+	u32 mmu_int_raw_off;
+	u32 mmu_int_msk_off;
+	u32 mmu_en_off;
+	u32 mmu_update_off;
+}MMU_REG;
 
 struct vpu_clk {
 	unsigned int freq_div;
@@ -81,6 +97,13 @@ struct vpu_clk {
 	struct clk *clk_ckg_eb;
 	struct clk *clk_ahb_vsp;
 	struct clk *ahb_parent_clk;
+	struct clk *clk_ahb_gate_vsp_eb;
+	struct clk *clk_mm_eb;
+	struct clk *clk_axi_gate_vsp;
+	struct clk *clk_vsp_mq_ahb_eb;
+	struct clk *clk_emc_vsp;
+	struct clk *clk_vsp_ahb_mmu_eb;
+	struct clk *emc_parent_clk;
 };
 
 struct vpu_qos_cfg {
@@ -97,10 +120,11 @@ struct vpu_platform_data {
 	const struct core_data *p_data;
 	struct vpu_qos_cfg qos;
 	struct vpu_clk clk;
-	struct register_gpr regs[ARRAY_SIZE(tb_name)];
+	struct register_gprrr regs[ARRAY_SIZE(tb_name)];
 	struct clock_name_map_t clock_name_map[ARRAY_SIZE(vpu_clk_src)];
 	struct semaphore vpu_mutex;
 	struct wakeup_source *vpu_wakelock;
+	bool qos_exist_flag;
 
 	void __iomem *vpu_base;
 	void __iomem *glb_reg_base;
@@ -125,6 +149,28 @@ struct vpu_platform_data {
 	struct vpu_fp *inst_ptr;
 };
 
+struct vpu_ops {
+	int (*get_eb_clk)(struct vpu_platform_data *data, struct device_node *np);
+	int (*clock_enable)(struct vpu_platform_data *data);
+	void (*clock_disable)(struct vpu_platform_data *data);
+	void (*check_pw_status)(struct vpu_platform_data *data);
+	u32 (*get_reset_mask)(struct vpu_platform_data *data);
+};
+
+extern const struct vpu_ops vpu_r1p0;
+extern const struct vpu_ops vsp_hevc_lite;
+extern const struct vpu_ops vsp_sharkl3;
+extern const struct vpu_ops vsp_pike2;
+
+struct core_data {
+	const char *name;
+	irqreturn_t (*isr)(int irq, void *data);
+	bool is_enc;
+	u32 dev_eb_mask;
+	const struct vpu_ops *ops;
+	struct mmu_reg *mmu_reg;
+};
+
 struct vpu_fp {
 	struct vpu_platform_data *dev_data;
 	bool is_vpu_acquired;
@@ -132,16 +178,16 @@ struct vpu_fp {
 	bool is_wakelock_got;
 };
 
+#define ARM_INT_STS_OFF		0x10
+#define ARM_INT_MASK_OFF	0x14
+#define ARM_INT_CLR_OFF		0x18
+#define ARM_INT_RAW_OFF		0x1c
+
 #define VPU_INT_STS_OFF		0x0
 #define VPU_INT_MASK_OFF	0x04
 #define VPU_INT_CLR_OFF		0x08
 #define VPU_INT_RAW_OFF		0x0c
 #define VPU_AXI_STS_OFF		0x1c
-
-#define VPU_MMU_INT_MASK_OFF	0xA0
-#define VPU_MMU_INT_CLR_OFF	0xA4
-#define VPU_MMU_INT_STS_OFF	0xA8
-#define VPU_MMU_INT_RAW_OFF	0xAC
 
 #define VPU_AQUIRE_TIMEOUT_MS	500
 #define VPU_INIT_TIMEOUT_MS	200
@@ -164,15 +210,17 @@ struct vpu_fp {
 
 irqreturn_t enc_core0_isr(int irq, void *data);
 irqreturn_t enc_core1_isr(int irq, void *data);
-irqreturn_t dec_core0_isr(int irq, void *data);
+irqreturn_t common_isr(int irq, void *data);
 void vpu_qos_config(struct vpu_platform_data *data);
-void vpu_check_pw_status(struct vpu_platform_data *data);
-int get_clk(struct vpu_platform_data *data, struct device_node *np);
-struct clk *get_clk_src_name(struct clock_name_map_t clock_name_map[], unsigned int freq_level, unsigned int max_freq_level);
-int find_freq_level(struct clock_name_map_t clock_name_map[], unsigned long freq, unsigned int max_freq_level);
-int clock_enable(struct vpu_platform_data *data);
-void clock_disable(struct vpu_platform_data *data);
+void get_freq_clk(struct vpu_platform_data *data, struct device_node *np);
+int get_eb_clk_lite(struct vpu_platform_data *data, struct device_node *np);
+int clock_enable_lite(struct vpu_platform_data *data);
+void clock_disable_lite(struct vpu_platform_data *data);
 void clr_vpu_interrupt_mask(struct vpu_platform_data *data);
+u32 get_reset_mask(struct vpu_platform_data *data);
+struct clk *get_clk_src_name(struct clock_name_map_t clock_name_map[], unsigned int freq_level, unsigned int max_freq_level);
+void vsp_check_pw_status(struct vpu_platform_data *data);
+int find_freq_level(struct clock_name_map_t clock_name_map[], unsigned long freq, unsigned int max_freq_level);
 int get_iova(void *inst_ptr, struct vpu_platform_data *data, struct iommu_map_data *mapdata, void __user *arg);
 int free_iova(void *inst_ptr, struct vpu_platform_data *data, struct iommu_map_data *ummapdata);
 long compat_vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
