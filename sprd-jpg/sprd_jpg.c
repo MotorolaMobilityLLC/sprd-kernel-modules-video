@@ -591,7 +591,9 @@ static int jpg_open(struct inode *inode, struct file *filp)
 	hw_dev.condition_work_BSM = 0;
 	hw_dev.jpg_int_status = 0;
 
-	sprd_glb_mm_pw_on_cfg();
+	if (hw_dev.version != SHARKL3 ){
+		sprd_glb_mm_pw_on_cfg();
+	}
 	pm_runtime_get_sync(hw_dev.jpg_dev);
 	jpg_qos_config(&hw_dev);
 	ret = 0;
@@ -625,7 +627,9 @@ static int jpg_release(struct inode *inode, struct file *filp)
 	}
 
 	pm_runtime_mark_last_busy(hw_dev.jpg_dev);
-	sprd_glb_mm_pw_off_cfg();
+	if (hw_dev.version != SHARKL3 ){
+		sprd_glb_mm_pw_off_cfg();
+	}
 	pm_runtime_put_sync(hw_dev.jpg_dev);
 	dev_info(hw_dev.jpg_dev, "jpg pw_off: ret %d", ret);
 
