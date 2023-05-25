@@ -97,7 +97,7 @@ static int vsp_shutdown(struct sprd_vsp_pd *vsp_pd)
 static int vsp_pw_on(struct generic_pm_domain *domain)
 {
 	int ret;
-	u32 power_state;
+	u32 power_state1, power_state2, power_state3;
 	u32 read_count = 0;
 
 	struct sprd_vsp_pd *vsp_pd = container_of(domain, struct sprd_vsp_pd, gpd);
@@ -131,19 +131,22 @@ static int vsp_pw_on(struct generic_pm_domain *domain)
 	do {
 		udelay(300);
 		read_count++;
-		ret = regmap_read(vsp_pd->regmap[PMU_PWR_STATUS],
-				vsp_pd->reg[PMU_PWR_STATUS], &power_state);
-		if (ret != 0) {
-			pr_err("regmap_read failed %s, %d\n",
-				__func__, __LINE__);
-			goto pw_on_exit;
-		}
-		power_state &= vsp_pd->mask[PMU_PWR_STATUS];
-	} while (power_state && read_count < 100);
+		regmap_read(vsp_pd->regmap[PMU_PWR_STATUS],
+			vsp_pd->reg[PMU_PWR_STATUS], &power_state1);
+		power_state1 &= vsp_pd->mask[PMU_PWR_STATUS];
+		regmap_read(vsp_pd->regmap[PMU_PWR_STATUS],
+			vsp_pd->reg[PMU_PWR_STATUS], &power_state2);
+		power_state2 &= vsp_pd->mask[PMU_PWR_STATUS];
+		regmap_read(vsp_pd->regmap[PMU_PWR_STATUS],
+			vsp_pd->reg[PMU_PWR_STATUS], &power_state3);
+		power_state3 &= vsp_pd->mask[PMU_PWR_STATUS];
+	} while ((power_state1 && read_count < 100)
+		 || (power_state1 != power_state2)
+		 || (power_state2 != power_state3));
 
-	if (power_state) {
+	if (power_state1) {
 		pr_err("%s set failed 0x%x\n", __func__,
-				power_state);
+			power_state1);
 		return -ETIMEDOUT;
 	}
 

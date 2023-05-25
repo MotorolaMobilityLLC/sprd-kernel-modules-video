@@ -97,7 +97,7 @@ static int vpu_vsp_cali(struct sprd_vpu_pd *vpu_pd)
 static int vpu_pw_on(struct generic_pm_domain *domain)
 {
 	int ret = 0;
-	u32 power_state;
+	u32 power_state1, power_state2, power_state3;
 	u32 read_count = 0;
 
 	struct sprd_vpu_pd *vpu_pd = container_of(domain, struct sprd_vpu_pd, gpd);
@@ -146,13 +146,21 @@ static int vpu_pw_on(struct generic_pm_domain *domain)
 		udelay(300);
 		read_count++;
 		regmap_read(vpu_pd->regmap[PMU_PWR_STATUS],
-			vpu_pd->reg[PMU_PWR_STATUS], &power_state);
-		power_state &= vpu_pd->mask[PMU_PWR_STATUS];
-	} while (power_state && read_count < 100);
+			vpu_pd->reg[PMU_PWR_STATUS], &power_state1);
+		power_state1 &= vpu_pd->mask[PMU_PWR_STATUS];
+		regmap_read(vpu_pd->regmap[PMU_PWR_STATUS],
+			vpu_pd->reg[PMU_PWR_STATUS], &power_state2);
+		power_state2 &= vpu_pd->mask[PMU_PWR_STATUS];
+		regmap_read(vpu_pd->regmap[PMU_PWR_STATUS],
+			vpu_pd->reg[PMU_PWR_STATUS], &power_state3);
+		power_state3 &= vpu_pd->mask[PMU_PWR_STATUS];
+	} while ((power_state1 && read_count < 100)
+		 || (power_state1 != power_state2)
+		 || (power_state2 != power_state3));
 
-	if (power_state) {
+	if (power_state1) {
 		pr_err("%s set failed 0x%x\n", __func__,
-			power_state);
+			power_state1);
 		return -ETIMEDOUT;
 	}
 
