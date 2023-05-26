@@ -1,3 +1,8 @@
+/*
+*SPDX-FileCopyrightText:2023 Unisoc (Shanghai) Technologies Co.Ltd
+*SPDX-License-Identifier:GPL-2.0-only
+*/
+
 #include "vpu_drv.h"
 #include "sprd_vpu.h"
 
