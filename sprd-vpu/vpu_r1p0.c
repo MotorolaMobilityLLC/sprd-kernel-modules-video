@@ -169,7 +169,8 @@ static void clock_disable(struct vpu_platform_data *data)
 static void check_pw_status(struct vpu_platform_data *data)
 {
 	int ret = 0;
-	u32 dpu_vsp_eb, dpu_vsp_apb_regs;
+	u32 dpu_vsp_eb = 0;
+	u32 dpu_vsp_apb_regs = 0;
 
 	regmap_read(data->regs[VPU_DOMAIN_EB].gpr,
 			data->regs[VPU_DOMAIN_EB].reg, &dpu_vsp_eb);

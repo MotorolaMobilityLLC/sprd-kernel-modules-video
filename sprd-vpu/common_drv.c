@@ -413,7 +413,7 @@ long compat_vpu_ioctl(struct file *filp, unsigned int cmd,
 void vsp_check_pw_status(struct vpu_platform_data *data)
 {
 	int ret = 0;
-	u32 dpu_vsp_apb_regs;
+	u32 dpu_vsp_apb_regs = 0;
 
 	regmap_read(data->regs[RESET].gpr, 0x0, &dpu_vsp_apb_regs); /*dev_eb*/
 
