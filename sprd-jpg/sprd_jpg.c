@@ -578,7 +578,7 @@ static int jpg_nocache_mmap(struct file *filp, struct vm_area_struct *vma)
 
 static int jpg_open(struct inode *inode, struct file *filp)
 {
-	int ret;
+	int ret = 0;
 	struct jpg_fh *jpg_fp = kmalloc(sizeof(struct jpg_fh), GFP_KERNEL);
 
 	filp->private_data = jpg_fp;
@@ -592,11 +592,15 @@ static int jpg_open(struct inode *inode, struct file *filp)
 	hw_dev.jpg_int_status = 0;
 
 	if (hw_dev.version != SHARKL3 ){
-		sprd_glb_mm_pw_on_cfg();
+		ret = sprd_glb_mm_pw_on_cfg();
+		if (ret) {
+			dev_err(hw_dev.jpg_dev, "jpg pw_on failed\n");
+			kfree(jpg_fp);
+			return ret;
+		}
 	}
 	pm_runtime_get_sync(hw_dev.jpg_dev);
 	jpg_qos_config(&hw_dev);
-	ret = 0;
 	dev_info(hw_dev.jpg_dev, "jpg pw_on: ret %d", ret);
 
 
