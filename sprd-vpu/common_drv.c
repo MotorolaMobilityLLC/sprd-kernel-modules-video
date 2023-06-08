@@ -38,6 +38,15 @@
 
 #define LEN_MAX 100
 
+#define SPRD_VPU_LOG_BUF_SIZE (4 * 1024)
+u32 vpu_reg_log[SPRD_VPU_LOG_BUF_SIZE];
+#define VPU_PRINT_BUF_LEN  (1*1024*1024)
+static raw_spinlock_t sprd_vpu_prlock;
+char vpu_log_buf[VPU_PRINT_BUF_LEN];
+static int log_buf_pos;
+static int log_length;
+static char vpu_tmp_buf[256];
+
 struct vpu_iommu_map_entry {
 	struct list_head list;
 
@@ -62,6 +71,60 @@ struct system_heap_buffer {
 
 	bool uncached;
 };
+
+void vpu_write_print_buf(char *source, int size)
+{
+	if (log_buf_pos + size <= VPU_PRINT_BUF_LEN) {
+		memcpy(vpu_log_buf + log_buf_pos, source, size);
+		log_buf_pos += size;
+	} else {
+		memcpy(vpu_log_buf + log_buf_pos, source, (VPU_PRINT_BUF_LEN - log_buf_pos));
+		log_buf_pos = log_buf_pos + size - VPU_PRINT_BUF_LEN;
+		memcpy(vpu_log_buf, source, log_buf_pos);
+	}
+
+	log_length += size;
+}
+
+void vpu_hang_debug_printf(const char *fmt, ...)
+{
+	int cpu = smp_processor_id();
+	u64 boottime_us = ktime_get_boot_fast_ns();
+	int size;
+	u64 sec, usec;
+
+	va_list args;
+
+	raw_spin_lock(&sprd_vpu_prlock);
+
+	do_div(boottime_us, NSEC_PER_USEC);
+
+	sec = boottime_us;
+	usec = do_div(sec, USEC_PER_SEC);
+
+	memset(vpu_tmp_buf, 0, sizeof(vpu_tmp_buf));
+
+	/* add timestamp header */
+	strncpy(vpu_tmp_buf, "[H \0", sizeof("[H \0"));
+	snprintf(vpu_tmp_buf + strlen(vpu_tmp_buf), 20, "%d\0", (int)sec);
+	strncat(vpu_tmp_buf + strlen(vpu_tmp_buf), ".\0", sizeof(".\0"));
+	snprintf(vpu_tmp_buf + strlen(vpu_tmp_buf), 20, "%06d\0", (int)usec);
+
+	/* add cpu num header */
+	strncat(vpu_tmp_buf + strlen(vpu_tmp_buf), "] c\0", sizeof("] c\0"));
+	snprintf(vpu_tmp_buf + strlen(vpu_tmp_buf), 20, "%d\0", cpu);
+	strncat(vpu_tmp_buf + strlen(vpu_tmp_buf), " \0", sizeof(" \0"));
+
+	size = strlen(vpu_tmp_buf);
+
+	va_start(args, fmt);
+	size += vsnprintf(vpu_tmp_buf + size, 255-size, fmt, args);
+	va_end(args);
+
+	vpu_write_print_buf(vpu_tmp_buf, size);
+
+	raw_spin_unlock(&sprd_vpu_prlock);
+}
 
 void vpu_qos_config(struct vpu_platform_data *data)
 {
@@ -106,6 +169,26 @@ void vpu_qos_config(struct vpu_platform_data *data)
 	}
 
 	ops->clock_disable(data);
+}
+
+static void vpu_print_reg(struct vpu_platform_data *data)
+{
+	int i,j;
+
+	i = 0;
+	j = 0;
+
+	for (i=0; i<0xac;i += 4){
+		vpu_reg_log[j] = readl_relaxed(data->vpu_base + i);
+		vpu_hang_debug_printf("mmu 0x%x reg 0x%x\n",i ,vpu_reg_log[j]);
+		j++;
+	}
+
+	for (i=0x1000; i<0x11f0;i += 4){
+		vpu_reg_log[j] = readl_relaxed(data->vpu_base + i);
+		vpu_hang_debug_printf("glb 0x%x reg 0x%x\n",i ,vpu_reg_log[j]);
+		j++;
+	}
 }
 
 static int handle_common_interrupt(struct vpu_platform_data *data, int *status)
@@ -167,6 +250,10 @@ static int handle_common_interrupt(struct vpu_platform_data *data, int *status)
 		WARN_ON_ONCE(1);
 	}
 
+	if ((int_status & (BIT(0)|BIT(4)|BIT(5)|BIT(13)|BIT(14)|BIT(15))) | mmu_status) {
+		pr_err("DEC int 0x%x, mmu_status 0x%x\n", int_status, mmu_status);
+		vpu_print_reg(data);
+	}
 	/* clear VSP accelerator interrupt bit */
 	clr_vpu_interrupt_mask(data);
 
@@ -220,7 +307,10 @@ static int handle_vpu_enc_interrupt(struct vpu_platform_data *data, int *status)
 				readl_relaxed(data->vpu_base + i));
 		WARN_ON_ONCE(1);
 	}
-
+	if ((int_status & (BIT(2)|BIT(3)|BIT(4)|BIT(5)|BIT(6))) | mmu_status) {
+		pr_err("ENC int 0x%x, mmu_status 0x%x\n", int_status, mmu_status);
+		vpu_print_reg(data);
+	}
 	/* clear VSP accelerator interrupt bit */
 	clr_vpu_interrupt_mask(data);
 
@@ -709,7 +799,12 @@ int clock_enable_lite(struct vpu_platform_data *data)
 			goto error1;
 		}
 		dev_dbg(dev, "vsp clk_ahb_gate_vsp_eb: clk_prepare_enable ok.\n");
+	} else {
+		ret =  -EINVAL;
+		dev_err(dev, "vsp clk_ahb_gate_vsp_eb is NULL.\n");
+		goto error1;
 	}
+
 	ret = clk_set_parent(clk->core_clk, clk->core_parent_clk);
 		if (ret) {
 			dev_err(dev, "clock[%s]: clk_set_parent() failed!", "clk_core");

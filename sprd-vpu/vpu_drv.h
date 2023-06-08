@@ -225,4 +225,5 @@ int get_iova(void *inst_ptr, struct vpu_platform_data *data, struct iommu_map_da
 int free_iova(void *inst_ptr, struct vpu_platform_data *data, struct iommu_map_data *ummapdata);
 long compat_vpu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 int vsp_get_dmabuf(int fd, struct dma_buf **dmabuf, void **buf, size_t *size);
-
+void vpu_hang_debug_printf(const char *fmt, ...);
+void vpu_write_print_buf(char *source, int size);
