@@ -442,7 +442,6 @@ int vsp_get_dmabuf(int fd, struct dma_buf **dmabuf, void **buf, size_t *size)
 			return PTR_ERR(*dmabuf);
 		}
 		buffer = (*dmabuf)->priv;
-		dma_buf_put(*dmabuf);
 	} else {
 		buffer = (*dmabuf)->priv;
 	}
@@ -560,6 +559,7 @@ err_map_attachment:
 		if (mapdata->need_cache_sync)
 			dma_buf_detach(dmabuf, attachment);
 err_attach:
+		dma_buf_put(entry->dmabuf);
 err_get_dmabuf:
 		ops->clock_disable(data);
 
@@ -619,6 +619,7 @@ int free_iova(void *inst_ptr, struct vpu_platform_data *data,
 	} else
 		dev_dbg(data->dev, "free_iova, bypass dma_buf_unmap_attachment and dma_buf_detach\n");
 
+	dma_buf_put(entry->dmabuf);
 	kfree(entry);
 
 	ops->clock_disable(data);
