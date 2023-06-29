@@ -559,7 +559,7 @@ err_map_attachment:
 		if (mapdata->need_cache_sync)
 			dma_buf_detach(dmabuf, attachment);
 err_attach:
-		dma_buf_put(entry->dmabuf);
+		dma_buf_put(dmabuf);
 err_get_dmabuf:
 		ops->clock_disable(data);
 
