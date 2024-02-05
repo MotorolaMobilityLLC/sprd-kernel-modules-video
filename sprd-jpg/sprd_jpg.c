@@ -511,6 +511,10 @@ static long jpg_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 
 	case JPG_GET_IOVA:
+		if (jpg_fp->is_clock_enabled == 0){
+			dev_err(hw_dev.jpg_dev, "jpg clk is disabled\n");
+			return -EFAULT;
+		}
 
 		ret =
 		    copy_from_user((void *)&mapdata,
@@ -526,6 +530,10 @@ static long jpg_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 
 	case JPG_FREE_IOVA:
+		if (jpg_fp->is_clock_enabled == 0){
+			dev_err(hw_dev.jpg_dev, "jpg clk is disabled\n");
+			return -EFAULT;
+		}
 
 		ret =
 		    copy_from_user((void *)&ummapdata,

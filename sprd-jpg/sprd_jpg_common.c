@@ -269,7 +269,6 @@ int jpg_get_iova(struct jpg_dev_t *hw_dev,
 			ret = PTR_ERR(dmabuf);
 			goto err_get_dmabuf;
 		}
-		dma_buf_put(dmabuf);
 
 		attachment = dma_buf_attach(dmabuf, hw_dev->jpg_dev);
 		if (IS_ERR_OR_NULL(attachment)) {
@@ -359,6 +358,7 @@ err_iommu_map:
 err_map_attachment:
 	dma_buf_detach(dmabuf, attachment);
 err_attach:
+	dma_buf_put(dmabuf);
 err_get_dmabuf:
 
 	return ret;
@@ -408,6 +408,7 @@ int jpg_free_iova(struct jpg_dev_t *hw_dev,
 			ummapdata->iova_addr, ummapdata->size);
 		dma_buf_unmap_attachment(entry->attachment, entry->table, DMA_BIDIRECTIONAL);
 		dma_buf_detach(entry->dmabuf, entry->attachment);
+		dma_buf_put(entry->dmabuf);
 		kfree(entry);
 	}
 
