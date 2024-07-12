@@ -1056,7 +1056,7 @@ int aw99703_sleepout(void)
 	} else {
 		pr_info("%s ic type: ktd3136.\n", __func__);
 		aw99703_i2c_write(drvdata->client, 0x02, 0xF7);
-		aw99703_i2c_write(drvdata->client, 0x06, 0x1F);
+		aw99703_i2c_write(drvdata->client, 0x06, 0x2F);
 		aw99703_i2c_write(drvdata->client, 0x08, 0x13);
 	}
 	pr_info("%s end.\n", __func__);
